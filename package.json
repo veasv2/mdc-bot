@@ -1,7 +1,6 @@
 {
   "name": "mdc-bot",
   "version": "1.0.0",
-  "description": "Bot Mesa de Partes - Municipalidad Distrital de Colca",
   "type": "module",
   "engines": {
     "node": "22.x"
