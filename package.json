@@ -2,14 +2,7 @@
   "name": "mdc-bot",
   "version": "1.0.0",
   "description": "Mesa de Partes Bot para Municipalidad Distrital de Colca",
-  "main": "api/webhook.js",
-  "scripts": {
-    "build": "echo 'Build completed - TypeScript files are compiled by Vercel'",
-    "dev": "tsc --watch",
-    "start": "node api/webhook.js",
-    "type-check": "tsc --noEmit",
-    "compile": "tsc"
-  },
+  "main": "api/webhook.ts",
   "keywords": [
     "telegram",
     "bot",
