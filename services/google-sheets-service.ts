@@ -3,6 +3,23 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 
+// Interfaces para las respuestas de Google API
+interface GoogleTokenResponse {
+  access_token?: string;
+  expires_in?: number;
+  error?: string;
+}
+
+interface GoogleSheetsResponse {
+  values?: string[][];
+}
+
+interface GoogleSheetsErrorResponse {
+  error?: {
+    message?: string;
+  };
+}
+
 export class GoogleSheetsService {
   private accessToken: string | null = null;
   private tokenExpiry: number = 0;
@@ -37,7 +54,7 @@ export class GoogleSheetsService {
         body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${token}`
       });
 
-      const data = await response.json();
+      const data = await response.json() as GoogleTokenResponse;
       
       if (!data.access_token) {
         console.error('Google API Error:', data);
@@ -46,7 +63,7 @@ export class GoogleSheetsService {
 
       // Guardar token con expiración
       this.accessToken = data.access_token;
-      this.tokenExpiry = Date.now() + (data.expires_in - 60) * 1000; // 60s de buffer
+      this.tokenExpiry = Date.now() + ((data.expires_in || 3600) - 60) * 1000; // 60s de buffer
 
       return this.accessToken!; // We just assigned it, so it's definitely not null
 
@@ -73,7 +90,7 @@ export class GoogleSheetsService {
         throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as GoogleSheetsResponse;
       return data.values || [];
 
     } catch (error) {
@@ -101,7 +118,7 @@ export class GoogleSheetsService {
         })
       });
 
-      const responseData = await response.json();
+      const responseData = await response.json() as GoogleSheetsErrorResponse;
 
       if (!response.ok) {
         console.error('❌ Error Google Sheets Response:', responseData);
@@ -135,7 +152,7 @@ export class GoogleSheetsService {
         })
       });
 
-      const responseData = await response.json();
+      const responseData = await response.json() as GoogleSheetsErrorResponse;
 
       if (!response.ok) {
         console.error('❌ Error actualizando Google Sheets:', responseData);

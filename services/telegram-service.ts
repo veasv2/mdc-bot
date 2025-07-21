@@ -3,6 +3,22 @@
 import { ArchivoInfo, TipoArchivo, ArchivoTelegram } from '../types';
 import { config } from '../config';
 
+// Interfaces para las respuestas de Telegram API
+interface TelegramResponse {
+  ok: boolean;
+  description?: string;
+  result?: any;
+}
+
+interface TelegramFileResponse {
+  ok: boolean;
+  description?: string;
+  result?: {
+    file_path?: string;
+    file_size?: number;
+  };
+}
+
 export class TelegramService {
   private readonly apiUrl: string;
 
@@ -27,7 +43,7 @@ export class TelegramService {
         })
       });
 
-      const result = await response.json();
+      const result = await response.json() as TelegramResponse;
       
       if (!result.ok) {
         console.error('Error enviando mensaje Telegram:', result);
@@ -67,7 +83,7 @@ export class TelegramService {
         })
       });
 
-      const result = await response.json();
+      const result = await response.json() as TelegramResponse;
       
       if (!result.ok) {
         console.error('Error enviando mensaje con botones:', result);
@@ -93,15 +109,15 @@ export class TelegramService {
   }> {
     try {
       const response = await fetch(`${this.apiUrl}/getFile?file_id=${fileId}`);
-      const result = await response.json();
+      const result = await response.json() as TelegramFileResponse;
       
       if (!result.ok) {
         return { error: result.description || 'Error obteniendo archivo' };
       }
 
       return {
-        file_path: result.result.file_path,
-        file_size: result.result.file_size
+        file_path: result.result?.file_path,
+        file_size: result.result?.file_size
       };
 
     } catch (error) {
