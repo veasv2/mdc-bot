@@ -1,8 +1,27 @@
 {
-  "name": "mesa-partes-bot",
+  "name": "mdc-bot",
   "version": "1.0.0",
+  "description": "Bot Mesa de Partes - Municipalidad Distrital de Colca",
+  "main": "api/webhook.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'No build needed for serverless'",
+    "start": "node api/webhook.js"
+  },
   "dependencies": {
-    "axios": "^1.6.0",
+    "jsonwebtoken": "^9.0.2",
     "node-fetch": "^3.3.2"
-  }
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "keywords": [
+    "telegram",
+    "bot", 
+    "mesa-partes",
+    "municipalidad",
+    "google-sheets"
+  ],
+  "author": "Mesa de Partes Digital",
+  "license": "ISC"
 }
