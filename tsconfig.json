@@ -32,6 +32,10 @@
   },
   "include": [
     "api/**/*",
+    "controllers/**/*",
+    "handlers/**/*",
+    "services/**/*",
+    "config/**/*",
     "types/**/*",
     "*.ts"
   ],
