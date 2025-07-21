@@ -26,7 +26,13 @@ async function procesarMensaje(message) {
   const usuario = message.from;
 
   console.log(`👤 Usuario: ${usuario.first_name} (@${usuario.username || usuario.id})`);
-  console.log(`💬 Mensaje: ${texto}`);
+  console.log(`💬 Mensaje: ${texto || 'sin texto'}`);
+  console.log(`📎 Adjuntos:`, {
+    documento: !!message.document,
+    foto: !!message.photo,
+    video: !!message.video,
+    audio: !!message.audio
+  });
 
   try {
     // Obtener perfil del usuario desde Google Sheets
@@ -37,10 +43,36 @@ async function procesarMensaje(message) {
       await manejarComando(chatId, texto, usuario, perfilUsuario);
     } 
     else if (message.document) {
-      await procesarDocumento(chatId, message.document, usuario, perfilUsuario);
+      await procesarDocumento(chatId, message.document, usuario, perfilUsuario, 'documento');
+    }
+    else if (message.photo) {
+      // Las fotos vienen como array, tomar la de mayor resolución
+      const foto = message.photo[message.photo.length - 1];
+      await procesarDocumento(chatId, foto, usuario, perfilUsuario, 'foto');
+    }
+    else if (message.video) {
+      await procesarDocumento(chatId, message.video, usuario, perfilUsuario, 'video');
+    }
+    else if (message.audio || message.voice) {
+      const archivo = message.audio || message.voice;
+      await procesarDocumento(chatId, archivo, usuario, perfilUsuario, 'audio');
     }
     else if (texto) {
       await procesarTextoLibre(chatId, texto, usuario, perfilUsuario);
+    }
+    else {
+      // Mensaje sin contenido reconocible
+      await enviarMensaje(chatId, `🤔 **Tipo de mensaje no reconocido**
+
+**Puedo procesar:**
+• 📄 Documentos (PDF, Word, Excel)
+• 📸 Fotos e imágenes
+• 🎥 Videos cortos
+• 🎵 Audios
+• 💬 Mensajes de texto
+• ⚡ Comandos (/start, /perfil, etc.)
+
+¿Podrías enviar tu archivo nuevamente?`);
     }
   } catch (error) {
     console.error('Error procesando mensaje:', error);
@@ -244,17 +276,23 @@ ${Object.entries(vars).map(([key, value]) =>
   }
 }
 
-async function procesarDocumento(chatId, documento, usuario, perfil) {
-  console.log(`📄 Procesando: ${documento.file_name} (${documento.file_size} bytes)`);
+async function procesarDocumento(chatId, archivo, usuario, perfil, tipoArchivo = 'documento') {
+  console.log(`📄 Procesando ${tipoArchivo}:`, archivo);
+  console.log(`📊 Detalles:`, {
+    file_id: archivo.file_id,
+    file_size: archivo.file_size,
+    file_name: archivo.file_name || `${tipoArchivo}.${getFileExtension(archivo)}`,
+    mime_type: archivo.mime_type
+  });
 
   try {
     // Analizar documento con Claude API
-    const analisis = await analizarDocumentoConClaude(documento, perfil);
+    const analisis = await analizarDocumentoConClaude(archivo, perfil, tipoArchivo);
     
     // Intentar registrar en Google Sheets
     let expediente;
     try {
-      expediente = await registrarEnGoogleSheets(documento, analisis, usuario, perfil);
+      expediente = await registrarEnGoogleSheets(archivo, analisis, usuario, perfil, tipoArchivo);
     } catch (error) {
       console.error('Error Google Sheets:', error);
       // Generar expediente temporal
@@ -266,14 +304,24 @@ async function procesarDocumento(chatId, documento, usuario, perfil) {
       };
     }
 
-    await enviarMensaje(chatId, `✅ **Documento registrado**
+    // Personalizar mensaje según tipo
+    const iconoTipo = {
+      'documento': '📄',
+      'foto': '📸',
+      'video': '🎥',
+      'audio': '🎵'
+    };
+
+    const nombreArchivo = archivo.file_name || `${tipoArchivo}_${Date.now()}.${getFileExtension(archivo)}`;
+
+    await enviarMensaje(chatId, `✅ **${iconoTipo[tipoArchivo] || '📎'} ${tipoArchivo.toUpperCase()} registrado**
 
 📋 **Expediente:** ${expediente.numero}
 **Fecha:** ${expediente.fecha}
 **Estado:** ${expediente.estado}
 
-📄 **Archivo:** ${documento.file_name}
-**Tamaño:** ${Math.round(documento.file_size / 1024)} KB
+📄 **Archivo:** ${nombreArchivo}
+**Tamaño:** ${archivo.file_size ? Math.round(archivo.file_size / 1024) + ' KB' : 'N/A'}
 **Tipo detectado:** ${analisis.tipo}
 
 🏢 **Asignado a:** ${analisis.area_responsable}
@@ -285,10 +333,10 @@ async function procesarDocumento(chatId, documento, usuario, perfil) {
 ${expediente.estado.includes('temp') ? '\n⚠️ *Registro temporal - se sincronizará con el sistema*' : ''}`);
 
   } catch (error) {
-    console.error('Error procesando documento:', error);
-    await enviarMensaje(chatId, `❌ **Error procesando documento**
+    console.error(`Error procesando ${tipoArchivo}:`, error);
+    await enviarMensaje(chatId, `❌ **Error procesando ${tipoArchivo}**
 
-No se pudo procesar ${documento.file_name}.
+No se pudo procesar el archivo.
 
 **Posibles causas:**
 • Error temporal del sistema
@@ -299,23 +347,88 @@ Intenta nuevamente en unos momentos.`);
   }
 }
 
-async function analizarDocumentoConClaude(documento, perfil) {
+function getFileExtension(archivo) {
+  // Para fotos sin file_name, usar mime_type
+  if (archivo.mime_type) {
+    const mimeMap = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'video/mp4': 'mp4',
+      'video/mpeg': 'mpeg',
+      'audio/mpeg': 'mp3',
+      'audio/ogg': 'ogg'
+    };
+    return mimeMap[archivo.mime_type] || 'bin';
+  }
+  
+  // Para documentos con file_name
+  if (archivo.file_name) {
+    return archivo.file_name.split('.').pop()?.toLowerCase() || 'bin';
+  }
+  
+  return 'bin';
+}
+
+async function analizarDocumentoConClaude(archivo, perfil, tipoArchivo = 'documento') {
   const tiposPorExtension = {
+    // Documentos
     'pdf': { tipo: 'Documento PDF', area: 'Secretaría General' },
     'doc': { tipo: 'Documento Word', area: 'Administración' },
     'docx': { tipo: 'Documento Word', area: 'Administración' },
-    'jpg': { tipo: 'Imagen escaneada', area: 'Mesa de Partes' },
-    'png': { tipo: 'Documento digitalizado', area: 'Mesa de Partes' }
+    'xls': { tipo: 'Hoja de Excel', area: 'Administración' },
+    'xlsx': { tipo: 'Hoja de Excel', area: 'Administración' },
+    
+    // Imágenes
+    'jpg': { tipo: 'Imagen - Documento escaneado', area: 'Mesa de Partes' },
+    'jpeg': { tipo: 'Imagen - Documento escaneado', area: 'Mesa de Partes' },
+    'png': { tipo: 'Imagen - Documento digitalizado', area: 'Mesa de Partes' },
+    'gif': { tipo: 'Imagen GIF', area: 'Mesa de Partes' },
+    'webp': { tipo: 'Imagen WebP', area: 'Mesa de Partes' },
+    
+    // Videos y Audio
+    'mp4': { tipo: 'Video MP4', area: 'Mesa de Partes' },
+    'mpeg': { tipo: 'Video MPEG', area: 'Mesa de Partes' },
+    'mp3': { tipo: 'Audio MP3', area: 'Mesa de Partes' },
+    'ogg': { tipo: 'Audio OGG', area: 'Mesa de Partes' }
   };
 
-  const extension = documento.file_name?.split('.').pop()?.toLowerCase();
-  const tipoBase = tiposPorExtension[extension] || { tipo: 'Documento', area: 'Mesa de Partes' };
+  const extension = getFileExtension(archivo);
+  const tipoBase = tiposPorExtension[extension] || { tipo: `Archivo ${extension.toUpperCase()}`, area: 'Mesa de Partes' };
 
+  // Ajustar según tipo de archivo enviado
+  if (tipoArchivo === 'foto') {
+    tipoBase.tipo = 'Fotografía - Documento capturado';
+  } else if (tipoArchivo === 'video') {
+    tipoBase.tipo = 'Video - Grabación';
+  } else if (tipoArchivo === 'audio') {
+    tipoBase.tipo = 'Audio - Grabación de voz';
+  }
+
+  // Lógica inteligente según área del usuario
   let areaResponsable = perfil.area !== 'Externo' ? perfil.area : tipoBase.area;
   let prioridad = perfil.acceso === 'Super' ? 'Alta' : 'Media';
 
-  if (documento.file_name?.toLowerCase().includes('urgente')) {
+  // Detectar urgencia por nombre de archivo
+  const nombreArchivo = archivo.file_name || `${tipoArchivo}.${extension}`;
+  if (nombreArchivo.toLowerCase().includes('urgente')) {
     prioridad = 'Muy Urgente';
+  }
+
+  // Análisis específico por tipo
+  let observaciones = `Enviado por ${perfil.cargo} de ${perfil.area}`;
+  let asuntoDetectado = `${tipoBase.tipo.toLowerCase()}`;
+
+  if (tipoArchivo === 'foto') {
+    observaciones += '. Fotografía tomada desde dispositivo móvil';
+    asuntoDetectado = 'Documento fotografiado';
+  } else if (tipoArchivo === 'video') {
+    observaciones += '. Video grabado';
+    asuntoDetectado = 'Grabación de video';
+  } else if (tipoArchivo === 'audio') {
+    observaciones += '. Grabación de audio';
+    asuntoDetectado = 'Mensaje de voz o audio';
   }
 
   return {
@@ -323,16 +436,18 @@ async function analizarDocumentoConClaude(documento, perfil) {
     area_responsable: areaResponsable,
     prioridad: prioridad,
     tiempo_estimado: prioridad === 'Muy Urgente' ? '24 horas' : '3-5 días hábiles',
-    observaciones: `Enviado por ${perfil.cargo} de ${perfil.area}`,
-    asunto_detectado: `Documento ${tipoBase.tipo.toLowerCase()}`
+    observaciones: observaciones,
+    asunto_detectado: asuntoDetectado
   };
 }
 
-async function registrarEnGoogleSheets(documento, analisis, usuario, perfil) {
+async function registrarEnGoogleSheets(archivo, analisis, usuario, perfil, tipoArchivo = 'documento') {
   const accessToken = await obtenerGoogleAccessToken();
   const ahora = new Date();
   
   const numeroExpediente = `2025-${String(ahora.getMonth() + 1).padStart(2, '0')}${String(ahora.getDate()).padStart(2, '0')}${String(ahora.getHours()).padStart(2, '0')}${String(ahora.getMinutes()).padStart(2, '0')}${String(ahora.getSeconds()).padStart(2, '0')}`;
+  
+  const nombreArchivo = archivo.file_name || `${tipoArchivo}_${Date.now()}.${getFileExtension(archivo)}`;
   
   const nuevaFila = [
     numeroExpediente,
@@ -345,8 +460,12 @@ async function registrarEnGoogleSheets(documento, analisis, usuario, perfil) {
     analisis.prioridad,
     analisis.observaciones,
     `@${usuario.username || usuario.id}`,
-    documento.file_name
+    nombreArchivo
   ];
+
+  console.log('📝 Intentando escribir en Google Sheets...');
+  console.log('Sheet ID:', process.env.GOOGLE_SHEETS_EXPEDIENTES_ID);
+  console.log('Datos:', nuevaFila);
 
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${process.env.GOOGLE_SHEETS_EXPEDIENTES_ID}/values/Sheet1:append?valueInputOption=RAW`,
@@ -362,10 +481,14 @@ async function registrarEnGoogleSheets(documento, analisis, usuario, perfil) {
     }
   );
 
+  const responseData = await response.json();
+
   if (!response.ok) {
-    throw new Error('Error escribiendo en Google Sheets');
+    console.error('❌ Error Google Sheets Response:', responseData);
+    throw new Error(`Error Google Sheets: ${responseData.error?.message || 'Sin detalles'}`);
   }
 
+  console.log('✅ Respuesta Google Sheets:', responseData);
   console.log('✅ Expediente registrado en Google Sheets');
 
   return {
