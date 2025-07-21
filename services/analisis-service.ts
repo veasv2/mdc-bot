@@ -8,6 +8,7 @@ import {
   TipoArchivo 
 } from '../types';
 import { config } from '../config';
+import Anthropic from '@anthropic-ai/sdk';
 
 export class AnalisisService {
   
@@ -36,17 +37,50 @@ export class AnalisisService {
   }
 
   /**
-   * Análisis avanzado usando Claude API (para futuras implementaciones)
+   * Análisis avanzado usando Claude API
    */
   private async analizarConClaude(
     archivoInfo: ArchivoInfo,
     usuario: UsuarioCompleto,
     tipoMensaje?: string
   ): Promise<AnalisisDocumento> {
-    // TODO: Implementar integración con Claude API
-    // Por ahora, usar análisis local
-    console.log('🤖 Claude API disponible, pero usando análisis local por ahora');
-    return this.analizarLocal(archivoInfo, usuario, tipoMensaje);
+    try {
+      if (!config.claudeApiKey) {
+        console.log('⚠️ Claude API key no configurada, usando análisis local');
+        return this.analizarLocal(archivoInfo, usuario, tipoMensaje);
+      }
+
+      const anthropic = new Anthropic({
+        apiKey: config.claudeApiKey,
+      });
+
+      // Preparar el contexto para Claude
+      const contexto = this.prepararContextoParaClaude(archivoInfo, usuario, tipoMensaje);
+
+      const response = await anthropic.messages.create({
+        model: "claude-3-haiku-20240307", // Modelo más económico para esta tarea
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: contexto
+        }]
+      });
+
+      // Procesar la respuesta de Claude
+      const analisisTexto = response.content[0].type === 'text' 
+        ? response.content[0].text 
+        : '';
+
+      const analisis = this.procesarRespuestaClaude(analisisTexto, archivoInfo, usuario);
+      
+      console.log('🤖 Análisis completado con Claude API');
+      return analisis;
+
+    } catch (error) {
+      console.error('Error al usar Claude API:', error);
+      console.log('🔄 Fallback a análisis local');
+      return this.analizarLocal(archivoInfo, usuario, tipoMensaje);
+    }
   }
 
   /**
@@ -338,5 +372,125 @@ export class AnalisisService {
       area_sugerida: this.determinarAreaResponsable(archivoInfo.file_name, {} as UsuarioCompleto, ''),
       prioridad_estimada: this.calcularPrioridad(archivoInfo.file_name, {} as UsuarioCompleto, archivoInfo)
     };
+  }
+
+  /**
+   * Prepara el contexto para enviar a Claude
+   */
+  private prepararContextoParaClaude(
+    archivoInfo: ArchivoInfo,
+    usuario: UsuarioCompleto,
+    tipoMensaje?: string
+  ): string {
+    return `
+Eres un asistente especializado en clasificación de documentos para una Mesa de Partes digital.
+
+DOCUMENTO A ANALIZAR:
+- Nombre del archivo: ${archivoInfo.file_name}
+- Tamaño: ${(archivoInfo.file_size / 1024).toFixed(2)} KB
+- Tipo MIME: ${archivoInfo.mime_type}
+- Usuario: ${usuario.nombre} ${usuario.apellido_paterno} ${usuario.apellido_materno}
+- Cargo: ${usuario.cargo || 'No especificado'}
+- Área: ${usuario.area || 'No especificada'}
+- Mensaje adicional: ${tipoMensaje || 'No especificado'}
+
+ÁREAS DISPONIBLES:
+- Mesa de Partes (predeterminada)
+- Recursos Humanos
+- Administración
+- Tecnología
+- Legal
+- Contabilidad
+- Logística
+- Gerencia
+
+NIVELES DE PRIORIDAD:
+- Alta: Documentos urgentes, legales, contratos importantes
+- Media: Documentos de rutina, informes regulares
+- Baja: Documentos informativos, archivos de referencia
+
+INSTRUCCIONES:
+Analiza el documento basándote en el nombre del archivo, tipo, usuario y contexto. Responde ÚNICAMENTE en formato JSON:
+
+{
+  "area_responsable": "nombre_del_area",
+  "prioridad": "Alta|Media|Baja",
+  "asunto_detectado": "descripción breve del asunto",
+  "observaciones": "descripción breve del análisis",
+  "confianza": 0.95
+}
+
+Respuesta:`;
+  }
+
+  /**
+   * Procesa la respuesta de Claude y la convierte en AnalisisDocumento
+   */
+  private procesarRespuestaClaude(
+    respuestaClaude: string,
+    archivoInfo: ArchivoInfo,
+    usuario: UsuarioCompleto
+  ): AnalisisDocumento {
+    try {
+      // Extraer JSON de la respuesta
+      const jsonMatch = respuestaClaude.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No se encontró JSON válido en la respuesta');
+      }
+
+      const analisisClaude = JSON.parse(jsonMatch[0]);
+
+      // Validar y mapear la respuesta
+      return {
+        tipo: this.detectarTipoDocumento(archivoInfo),
+        area_responsable: this.validarArea(analisisClaude.area_responsable),
+        prioridad: this.validarPrioridad(analisisClaude.prioridad),
+        tiempo_estimado: this.calcularTiempoEstimado(analisisClaude.prioridad),
+        observaciones: `Análisis IA (confianza: ${(analisisClaude.confianza * 100).toFixed(1)}%) - ${analisisClaude.observaciones || ''}`,
+        asunto_detectado: analisisClaude.asunto_detectado || this.detectarAsunto(archivoInfo.file_name, this.detectarTipoDocumento(archivoInfo)),
+        requiere_revision: analisisClaude.confianza < 0.8,
+        confianza: analisisClaude.confianza || 0.8
+      };
+
+    } catch (error) {
+      console.error('Error procesando respuesta de Claude:', error);
+      // Fallback a análisis local
+      return this.analizarLocal(archivoInfo, usuario);
+    }
+  }
+
+  /**
+   * Valida que el área esté en la lista permitida
+   */
+  private validarArea(area: string): string {
+    const areasValidas = [
+      'Mesa de Partes',
+      'Recursos Humanos', 
+      'Administración',
+      'Tecnología',
+      'Legal',
+      'Contabilidad',
+      'Logística',
+      'Gerencia'
+    ];
+
+    const areaEncontrada = areasValidas.find(
+      a => a.toLowerCase() === area?.toLowerCase()
+    );
+
+    return areaEncontrada || config.defaultArea;
+  }
+
+  /**
+   * Valida que la prioridad esté en los valores permitidos
+   */
+  private validarPrioridad(prioridad: string): PrioridadNivel {
+    const prioridadesValidas: PrioridadNivel[] = ['Alta', 'Media', 'Baja'];
+    
+    const prioridadEncontrada = prioridadesValidas.find(
+      p => p.toLowerCase() === prioridad?.toLowerCase()
+    );
+
+    return prioridadEncontrada || 'Media';
   }
 }
