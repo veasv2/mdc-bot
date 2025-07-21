@@ -1,11 +1,37 @@
 {
   "name": "mdc-bot",
   "version": "1.0.0",
-  "type": "module",
-  "engines": {
-    "node": "22.x"
+  "description": "Mesa de Partes Bot para Municipalidad Distrital de Colca",
+  "main": "api/webhook.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node api/webhook.js",
+    "type-check": "tsc --noEmit"
   },
+  "keywords": [
+    "telegram",
+    "bot",
+    "mesa-partes",
+    "municipalidad",
+    "google-sheets"
+  ],
+  "author": "Municipalidad Distrital de Colca",
+  "license": "MIT",
   "dependencies": {
-    "jsonwebtoken": "^9.0.2"
+    "axios": "^1.10.0",
+    "form-data": "^4.0.4",
+    "googleapis": "^153.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.0.15",
+    "@types/node-telegram-bot-api": "^0.64.9",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
