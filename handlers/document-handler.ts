@@ -1,10 +1,10 @@
 // src/handlers/DocumentHandler.ts - Manejador de documentos
 
 import { ArchivoTelegram, UsuarioCompleto, TelegramUser } from '../types';
-import { TelegramService } from 'services/telegram-service';
-import { ExpedienteService } from 'services/expediente-service';
-import { AnalisisService } from 'services/analisis-service';
-import { UsuarioService } from 'services/usuario-service';
+import { TelegramService } from '../services/telegram-service';
+import { ExpedienteService } from '../services/expediente-service';
+import { AnalisisService } from '../services/analisis-service';
+import { UsuarioService } from '../services/usuario-service';
 
 export class DocumentHandler {
   private telegramService: TelegramService;

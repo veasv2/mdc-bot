@@ -1,9 +1,9 @@
 // api/webhook.ts - Endpoint principal del bot de Mesa de Partes
 
-import { VercelRequest, VercelResponse } from 'types/vercel';
-import { TelegramUpdate } from 'types';
-import { BotController } from 'controllers/bot-controller';
-import { config } from 'config';
+import { VercelRequest, VercelResponse } from '../types/vercel';
+import { TelegramUpdate } from '../types';
+import { BotController } from '../controllers/bot-controller';
+import { config } from '../config';
 
 // Instancia única del controlador
 const botController = new BotController();

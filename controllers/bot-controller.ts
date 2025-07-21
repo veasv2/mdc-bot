@@ -1,12 +1,12 @@
 // src/controllers/BotController.ts - Controlador principal del bot
 
 import { TelegramMessage, UsuarioCompleto, ComandoBot } from '../types';
-import { UsuarioService } from 'services/usuario-service';
-import { TelegramService } from 'services/telegram-service';
-import { ExpedienteService } from 'services/expediente-service';
-import { AnalisisService } from 'services/analisis-service';
-import { CommandHandler } from 'handlers/command-handler';
-import { DocumentHandler } from 'handlers/document-handler';
+import { UsuarioService } from '../services/usuario-service';
+import { TelegramService } from '../services/telegram-service';
+import { ExpedienteService } from '../services/expediente-service';
+import { AnalisisService } from '../services/analisis-service';
+import { CommandHandler } from '../handlers/command-handler';
+import { DocumentHandler } from '../handlers/document-handler';
 import { config } from '../config';
 
 export class BotController {

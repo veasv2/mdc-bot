@@ -1,9 +1,9 @@
 // src/handlers/CommandHandler.ts - Manejador de comandos del bot
 
 import { ComandoBot, UsuarioCompleto, TelegramUser } from '../types';
-import { UsuarioService } from 'services/usuario-service';
-import { TelegramService } from 'services/telegram-service';
-import { ExpedienteService } from 'services/expediente-service';
+import { UsuarioService } from '../services/usuario-service';
+import { TelegramService } from '../services/telegram-service';
+import { ExpedienteService } from '../services/expediente-service';
 import { config } from '../config';
 
 export class CommandHandler {
