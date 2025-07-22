@@ -76,9 +76,19 @@ export class AnalisisService {
       console.log('🤖 Análisis completado con Claude API');
       return analisis;
 
-    } catch (error) {
-      console.error('Error al usar Claude API:', error);
-      console.log('🔄 Fallback a análisis local');
+    } catch (error: any) {
+      // Manejo específico de errores de Claude API
+      if (error?.status === 400 && error?.error?.error?.message?.includes('credit balance')) {
+        console.log('💳 Claude API: Créditos insuficientes, usando análisis local');
+      } else if (error?.status === 401) {
+        console.log('🔑 Claude API: API key inválida, usando análisis local');
+      } else if (error?.status === 429) {
+        console.log('🚦 Claude API: Límite de requests alcanzado, usando análisis local');
+      } else {
+        console.error('❌ Error al usar Claude API:', error?.message || error);
+      }
+      
+      console.log('🔄 Continuando con análisis local...');
       return this.analizarLocal(archivoInfo, usuario, tipoMensaje);
     }
   }
